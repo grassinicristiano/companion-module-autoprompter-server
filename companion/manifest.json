@@ -1,0 +1,26 @@
+{
+	"id": "autoprompter-server",
+	"name": "autoprompter-server",
+	"shortname": "AutoPrompter",
+	"description": "Control AutoPrompter Server over OSC: transport, setlist, songs and speeches, markers, overlays, ready light, timers and instant messages, with feedback for button states.",
+	"manufacturer": "AutoPrompter",
+	"products": ["AutoPrompter Server"],
+	"keywords": ["prompter", "autoprompter", "osc", "broadcast", "live"],
+	"version": "1.0.0",
+	"license": "MIT",
+	"repository": "https://github.com/bitfocus/companion-module-autoprompter-server",
+	"bugs": "https://github.com/bitfocus/companion-module-autoprompter-server/issues",
+	"maintainers": [
+		{
+			"name": "Cristiano Grassini",
+			"email": "grassinicristiano@gmail.com"
+		}
+	],
+	"legacyIds": [],
+	"runtime": {
+		"type": "node22",
+		"api": "nodejs-ipc",
+		"apiVersion": "1.11.0",
+		"entrypoint": "../src/main.js"
+	}
+}

@@ -1,0 +1,34 @@
+{
+  "name": "autoprompter-server",
+  "version": "1.0.0",
+  "description": "Bitfocus Companion module for AutoPrompter Server, controlled over OSC",
+  "keywords": [
+    "bitfocus-companion-module",
+    "autoprompter",
+    "prompter",
+    "osc",
+    "broadcast",
+    "live"
+  ],
+  "license": "MIT",
+  "main": "src/main.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bitfocus/companion-module-autoprompter-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bitfocus/companion-module-autoprompter-server/issues"
+  },
+  "scripts": {
+    "build": "companion-module-build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@companion-module/base": "^1.11.0"
+  },
+  "devDependencies": {
+    "@companion-module/tools": "^2.1.0"
+  }
+}
