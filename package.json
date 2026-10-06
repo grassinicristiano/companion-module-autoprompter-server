@@ -14,10 +14,10 @@
   "main": "src/main.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bitfocus/companion-module-autoprompter-server.git"
+    "url": "git+https://github.com/grassinicristiano/companion-module-autoprompter-server.git"
   },
   "bugs": {
-    "url": "https://github.com/bitfocus/companion-module-autoprompter-server/issues"
+    "url": "https://github.com/grassinicristiano/companion-module-autoprompter-server/issues"
   },
   "scripts": {
     "build": "companion-module-build"

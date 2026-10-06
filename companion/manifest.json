@@ -8,8 +8,8 @@
 	"keywords": ["prompter", "autoprompter", "osc", "broadcast", "live"],
 	"version": "1.0.0",
 	"license": "MIT",
-	"repository": "https://github.com/bitfocus/companion-module-autoprompter-server",
-	"bugs": "https://github.com/bitfocus/companion-module-autoprompter-server/issues",
+	"repository": "https://github.com/grassinicristiano/companion-module-autoprompter-server",
+	"bugs": "https://github.com/grassinicristiano/companion-module-autoprompter-server/issues",
 	"maintainers": [
 		{
 			"name": "Cristiano Grassini",
