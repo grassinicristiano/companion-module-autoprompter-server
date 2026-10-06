@@ -84,6 +84,11 @@ class AutoPrompterInstance extends InstanceBase {
 		this._setlistName  = ''
 		this._portalOpen   = false
 		this._markerCurrent = 0
+		// Brani nella cartella testi del server: riempiono le tendine "Load song"
+		this._songFiles    = []
+		// Ultimo elenco di marker usato per la tendina "Go to (by name)"
+		this._markerChoicesKey = ''
+		this._markerChoicesTimer = null
 		// ShuttleXpress
 		this._shuttleConnected = false
 		this._cruiseActive     = false
@@ -113,6 +118,7 @@ class AutoPrompterInstance extends InstanceBase {
 	}
 
 	async destroy() {
+		clearTimeout(this._markerChoicesTimer)
 		this._stopUdp()
 	}
 
@@ -167,6 +173,9 @@ class AutoPrompterInstance extends InstanceBase {
 		this._sock.bind(rxPort, () => {
 			this.log('info', `Listening for feedback on UDP :${rxPort}`)
 			this.updateStatus(InstanceStatus.Ok)
+			// Il server manda il feedback solo quando cambia: chiediamo lo stato
+			// completo, compreso l'elenco dei brani per le tendine
+			this._send('/ap/refresh')
 		})
 	}
 
@@ -190,6 +199,17 @@ class AutoPrompterInstance extends InstanceBase {
 	_onFeedback(address, args) {
 		const a   = address.toLowerCase()
 		const val = args[0]
+		// Elenco brani: un argomento per brano. Cambia le scelte delle tendine,
+		// quindi si ridefiniscono azioni e feedback
+		if (a === '/ap/fb/song_files') {
+			const files = args.map((f) => String(f))
+			if (files.join('\n') !== this._songFiles.join('\n')) {
+				this._songFiles = files
+				this._setupActions()
+				this._setupFeedbacks()
+			}
+			return
+		}
 		if      (a === '/ap/fb/playing')       this._playing      = val === 1 || val === true
 		else if (a === '/ap/fb/blackout')      this._blackout     = val === 1 || val === true
 		else if (a === '/ap/fb/testpattern')   this._testpattern  = val === 1 || val === true
@@ -240,11 +260,58 @@ class AutoPrompterInstance extends InstanceBase {
 			if (!isNaN(idx) && idx >= 0 && idx < this._markerCount) this._markerLabels[idx] = String(val ?? '')
 		}
 		else return
+		if (a.startsWith('/ap/fb/marker_')) this._scheduleMarkerChoices()
 		this.checkFeedbacks()
 		this._updateVariables()
 	}
 
+	// Le etichette arrivano un messaggio per marker (fino a 100 di fila a ogni
+	// cambio di testo): si aspetta che la raffica finisca e si ridefiniscono le
+	// azioni solo se l'elenco è davvero cambiato
+	_scheduleMarkerChoices() {
+		clearTimeout(this._markerChoicesTimer)
+		this._markerChoicesTimer = setTimeout(() => {
+			const key = this._markerNames().join('\n')
+			if (key === this._markerChoicesKey) return
+			this._markerChoicesKey = key
+			this._setupActions()
+			this._setupFeedbacks()
+		}, 300)
+	}
+
+	// Etichette dei marker del testo aperto, senza vuoti né doppioni. I marker
+	// senza nome arrivano come "Marker 3": non si raggiungono per nome, via
+	_markerNames() {
+		const seen = new Set()
+		return this._markerLabels.filter((l) => {
+			const k = String(l || '').trim()
+			if (!k || /^marker \d+$/i.test(k) || seen.has(k.toLowerCase())) return false
+			seen.add(k.toLowerCase())
+			return true
+		}).map((l) => String(l).trim())
+	}
+
 	// ── Actions ────────────────────────────────────────────────────────────────
+
+	// Tendina dei brani del server. allowCustom: si può anche scrivere un nome a
+	// mano (server vecchio senza elenco, o brano non ancora nella cartella)
+	_songOption(label) {
+		return {
+			type: 'dropdown', id: 'name', label, default: '',
+			choices: this._songFiles.map((f) => ({ id: f, label: f })),
+			allowCustom: true,
+		}
+	}
+
+	// Tendina con i marker del testo aperto; allowCustom per scrivere il nome
+	// di un marker di un altro brano (case-insensitive, primo che corrisponde)
+	_markerOption() {
+		return {
+			type: 'dropdown', id: 'value', label: 'Marker', default: '',
+			choices: this._markerNames().map((m) => ({ id: m, label: m })),
+			allowCustom: true,
+		}
+	}
 
 	_setupActions() {
 		this.setActionDefinitions({
@@ -282,7 +349,7 @@ class AutoPrompterInstance extends InstanceBase {
 			setlist_prev: { name: 'Setlist \u2014 Previous row', options: [], callback: () => this._send('/ap/setlist/prev') },
 			song_load: {
 				name: 'Song \u2014 Load by name',
-				options: [{ type: 'textinput', id: 'name', label: 'File name (with or without .docx)', default: '' }],
+				options: [this._songOption('Song')],
 				callback: (action) => this._send('/ap/song/load', String(action.options.name || '')),
 			},
 			song_clear:   { name: 'Song \u2014 Clear text (show logo)', options: [], callback: () => this._send('/ap/song/clear') },
@@ -314,7 +381,7 @@ class AutoPrompterInstance extends InstanceBase {
 			},
 			marker_goto_name: {
 				name: 'Marker \u2014 Go to (by name)',
-				options: [{ type: 'textinput', id: 'value', label: 'Marker name (case-insensitive, first match)', default: '' }],
+				options: [this._markerOption()],
 				callback: (action) => this._send('/ap/marker/goto_name', String(action.options.value)),
 			},
 
@@ -472,12 +539,28 @@ class AutoPrompterInstance extends InstanceBase {
 				options: [],
 				callback: () => this._imsgActive,
 			},
+			// ── Markers ──
+			// Stesso confronto del server: nome normalizzato, senza maiuscole
+			marker_is: {
+				name: 'Current marker is…',
+				type: 'boolean',
+				defaultStyle: { bgcolor: 0x3a3aaa, color: 0xffffff },
+				options: [this._markerOption()],
+				callback: (fb) => {
+					const norm = (t) => String(t || '').trim().replace(/\s+/g, ' ').toLowerCase()
+					const want = norm(fb.options.value)
+					const cur  = norm(this._markerCurrent > 0 ? this._markerLabels[this._markerCurrent - 1] : '')
+					// Le etichette arrivano tagliate a 25 caratteri: un nome scritto per
+					// intero si riconosce dall'inizio
+					return !!want && (cur === want || (cur.length >= 25 && want.startsWith(cur)))
+				},
+			},
 			// ── Setlist and current song ──
 			song_is: {
 				name: 'Current song is…',
 				type: 'boolean',
 				defaultStyle: { bgcolor: 0x00aa00, color: 0xffffff },
-				options: [{ type: 'textinput', id: 'name', label: 'Song name (without extension)', default: '' }],
+				options: [this._songOption('Song')],
 				callback: (fb) => {
 					const want = String(fb.options.name || '').trim().toLowerCase()
 					return !!want && this._songCurrent.trim().toLowerCase() === want
@@ -630,6 +713,8 @@ class AutoPrompterInstance extends InstanceBase {
 			}] : [],
 			steps: [{ down: [{ actionId, options: actionOptions ?? {} }], up: [] }],
 		})
+		// Stesso preset con il testo più piccolo, per le parole lunghe
+		const small = (preset) => ({ ...preset, style: { ...preset.style, size: '14' } })
 
 		this.setPresetDefinitions({
 
@@ -673,26 +758,46 @@ class AutoPrompterInstance extends InstanceBase {
 			),
 
 			// ── Semaforo ────────────────────────────────────────────────────────
-			semaforo_ok: btn(
-				'Semaforo', 'Verde', 'VIA', 0x004422,
+			// Testo a 14: a 18 "ROSSO" non sta su una riga e la O va a capo;
+			// SEM OFF uguale, per avere i tre tasti del semaforo uniformi
+			semaforo_ok: small(btn(
+				'Semaforo', 'Verde', 'VERDE', 0x004422,
 				'semaforo_ok', {}, 'semaforo_ok', 0x00cc44
-			),
-			semaforo_ko: btn(
-				'Semaforo', 'Rosso', 'STOP', 0x440000,
+			)),
+			semaforo_ko: small(btn(
+				'Semaforo', 'Rosso', 'ROSSO', 0x440000,
 				'semaforo_ko', {}, 'semaforo_ko', 0xdd2222
-			),
-			semaforo_none: btn(
+			)),
+			semaforo_none: small(btn(
 				'Semaforo', 'Spento', 'SEM\nOFF', 0x222222,
 				'semaforo_none'
-			),
+			)),
 
 			// ── Navigazione ─────────────────────────────────────────────────────
 			marker_next: btn('Navigazione', 'Marker ▶', 'MARK ▶', 0x222233, 'marker_next'),
 			marker_prev: btn('Navigazione', '◀ Marker', '◀ MARK', 0x222233, 'marker_prev'),
 			scroll_top:  btn('Navigazione', "Top", 'TOP', 0x222222, 'scroll_top'),
 
-			// ── Marker (goto per indice) — preset generico, clonare e impostare l'indice ──
-			marker_goto_generic: btn('Marker', 'Vai al Marker', 'MARKER\n$(autoprompter:marker_0)', 0x1a1a33, 'marker_goto', { value: 0 }),
+			// ── Song ────────────────────────────────────────────────────────────
+			// Richiamo generico: clonare il preset e scrivere il nome del file
+			// sia nell'azione sia nel feedback (si accende quando è in onda)
+			song_load: {
+				type: 'button', category: 'Song', name: 'Load song (set the name)',
+				style: { text: 'SONG', size: '18', color: 0xffffff, bgcolor: 0x332200 },
+				feedbacks: [{ feedbackId: 'song_is', options: { name: '' }, style: { bgcolor: 0x00aa00, color: 0xffffff } }],
+				steps: [{ down: [{ actionId: 'song_load', options: { name: '' } }], up: [] }],
+			},
+			song_clear: btn('Song', 'Clear song', 'SONG\nCLEAR', 0x333333, 'song_clear'),
+
+			// ── Marker ──────────────────────────────────────────────────────────
+			// Per nome: clonare il preset e scegliere il marker sia nell'azione sia
+			// nel feedback (si accende quando il testo è su quel marker)
+			marker_goto_name: {
+				type: 'button', category: 'Marker', name: 'Go to marker by name (choose it)',
+				style: { text: 'MARKER', size: '14', color: 0xffffff, bgcolor: 0x1a1a33 },
+				feedbacks: [{ feedbackId: 'marker_is', options: { value: '' }, style: { bgcolor: 0x3a3aaa, color: 0xffffff } }],
+				steps: [{ down: [{ actionId: 'marker_goto_name', options: { value: '' } }], up: [] }],
+			},
 
 			// ── Timer ───────────────────────────────────────────────────────────
 			timer_show: btn(
@@ -790,6 +895,13 @@ class AutoPrompterInstance extends InstanceBase {
 			),
 
 			// ── Messaggio Istantaneo ────────────────────────────────────────────────────────
+			// Messaggio libero: clonare il preset e scrivere il testo nell'azione
+			imsg_custom: {
+				type: 'button', category: 'Instant message', name: 'Message: custom (set the text)',
+				style: { text: 'MSG', size: '14', color: 0xffffff, bgcolor: 0x003366 },
+				feedbacks: [],
+				steps: [{ down: [{ actionId: 'imsg_send', options: { text: '' } }], up: [] }],
+			},
 			imsg_clear_btn: {
 				type: 'button', category: 'Instant message', name: 'Clear message',
 				style: { text: 'MSG\nCLEAR', size: '14', color: 0xffffff, bgcolor: 0x333333 },
