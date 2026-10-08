@@ -43,8 +43,15 @@ shown in the AutoPrompter remote, so ten buttons numbered 1 to 10 are usually al
 There are also **Next row** and **Previous row**, loading a song or a speech **by name**, closing a
 speech, and clearing the text back to the logo.
 
-**Markers** — next, previous, go to a marker by index or by name. Marker labels arrive as variables,
-so a button can show the name of the marker it jumps to.
+When you load a song by name you pick it from a **drop-down list** of the songs in the show's text
+folder, kept up to date by AutoPrompter. You can still type a name by hand.
+
+**Markers** — next, previous, go to a marker by index or by name. Going **by name** offers a
+drop-down list of the markers in the text currently open: open the song in the prompter first, then
+pick its markers. A marker is found by name wherever it sits, so the button keeps working if the
+text is edited and markers move; if two markers share a name, the first one wins. The marker lands
+just above the pointer. Marker labels also arrive as variables, so a button can show the name of the
+marker it jumps to.
 
 **Overlays and ready light** — blackout, test pattern, logo; ready light green, red or off.
 
@@ -64,10 +71,22 @@ Two feedbacks are particularly handy for the setlist:
 - **Current song is…** — matches by name
 - **Current song is setlist row…** — matches by row number
 
-so the button of the song on air lights up by itself.
+so the button of the song on air lights up by itself. **Current marker is…** does the same for
+markers: the button lights up while the text is on that marker. Songs and markers work together, so
+a page can hold the songs of the show and, beside them, the markers of each one.
 
 There is feedback for the ShuttleXpress too: whether it is connected, whether cruise is engaged and
 whether it is paused.
+
+## Presets
+
+Ready-made buttons for every group of actions. A few are templates to finish after dragging them onto
+a page:
+
+- **Song → Load song** — pick the song in the action *and* in the feedback, so the button both loads
+  it and lights up while it is on air. **Clear song** goes back to the logo.
+- **Marker → Go to marker by name** — pick the marker in the action and in the feedback, the same way.
+- **Instant message → custom** — write your own text in the action.
 
 ## Variables
 
@@ -92,6 +111,12 @@ Prefix is `$(autoprompter-server:…)`.
 | `imsg_active` | Instant message on screen (0/1) |
 | `shuttle_connected`, `cruise_active`, `cruise_paused` | ShuttleXpress |
 | `pointer_hidden`, `daylight` | Appearance |
+
+## Requirements
+
+AutoPrompter Server **2.2.9 or later** for the song list and for the full state when Companion
+connects. With older versions everything else works, but the drop-down lists stay empty (names can
+still be typed) and buttons only update once something changes on the prompter.
 
 ## If feedback does not arrive
 
